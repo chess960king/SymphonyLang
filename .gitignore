@@ -1,0 +1,13 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Generated output (not source code)
+*.mid
+output.mid
+
+# OS junk
+.DS_Store
