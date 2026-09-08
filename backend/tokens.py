@@ -33,6 +33,8 @@ class TokenType(Enum):
     INSTRUMENT = auto()
     TRACK = auto()
     ENDTRACK = auto()
+    PARALLEL = auto()
+    ENDPARALLEL = auto()
     REPEAT = auto()
     ENDREPEAT = auto()
     INCLUDE = auto()
@@ -79,6 +81,8 @@ KEYWORDS = {
     "INSTRUMENT": TokenType.INSTRUMENT,
     "TRACK": TokenType.TRACK,
     "ENDTRACK": TokenType.ENDTRACK,
+    "PARALLEL": TokenType.PARALLEL,
+    "ENDPARALLEL": TokenType.ENDPARALLEL,
     "REPEAT": TokenType.REPEAT,
     "ENDREPEAT": TokenType.ENDREPEAT,
     "INCLUDE": TokenType.INCLUDE,

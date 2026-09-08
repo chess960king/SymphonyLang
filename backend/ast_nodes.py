@@ -202,6 +202,19 @@ class TrackStmt(Node):
         return f"TrackStmt({self.name})"
 
 
+class ParallelBlock(Node):
+    """A group of TRACK blocks explicitly declared to play at the same time.
+    Every track inside here MUST get a different MIDI channel - this is
+    exactly what the channel allocator uses to know which tracks 'conflict'."""
+    def __init__(self, tracks, line):
+        self.tracks = tracks   # list of TrackStmt
+        self.line = line
+
+    def __repr__(self):
+        names = [t.name for t in self.tracks]
+        return f"ParallelBlock({names})"
+
+
 class IncludeStmt(Node):
     def __init__(self, filename, line):
         self.filename = filename

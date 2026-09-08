@@ -12,7 +12,8 @@ from tokens import TokenType
 from ast_nodes import (
     Program, VarDecl, Assign, BinaryExpr, UnaryExpr, NumberLiteral, Identifier,
     IfStmt, ForStmt, RepeatStmt, FuncDecl, FuncCall, ReturnStmt,
-    PlayStmt, RestStmt, TempoStmt, InstrumentStmt, TrackStmt, IncludeStmt,
+    PlayStmt, RestStmt, TempoStmt, InstrumentStmt, TrackStmt, ParallelBlock,
+    IncludeStmt,
 )
 
 
@@ -32,12 +33,13 @@ STATEMENT_START = {
     TokenType.CALL, TokenType.PLAY, TokenType.REST, TokenType.TEMPO,
     TokenType.INSTRUMENT, TokenType.TRACK, TokenType.REPEAT,
     TokenType.INCLUDE, TokenType.RETURN, TokenType.IDENTIFIER,
+    TokenType.PARALLEL,
 }
 
 # Tokens that end a block - parsing loops should stop here.
 BLOCK_ENDERS = {
     TokenType.ENDIF, TokenType.ELSE, TokenType.ENDFOR, TokenType.ENDFUNCTION,
-    TokenType.ENDTRACK, TokenType.ENDREPEAT, TokenType.EOF,
+    TokenType.ENDTRACK, TokenType.ENDREPEAT, TokenType.ENDPARALLEL, TokenType.EOF,
 }
 
 
@@ -125,6 +127,8 @@ class Parser:
                 return self._parse_instrument()
             if tok.type == TokenType.TRACK:
                 return self._parse_track()
+            if tok.type == TokenType.PARALLEL:
+                return self._parse_parallel()
             if tok.type == TokenType.INCLUDE:
                 return self._parse_include()
             if tok.type == TokenType.IDENTIFIER:
@@ -363,6 +367,23 @@ class Parser:
         self._expect(TokenType.ENDTRACK, "Expected 'ENDTRACK' to close TRACK block")
         name = name_tok.value if name_tok else "?"
         return TrackStmt(name, body, line)
+
+    def _parse_parallel(self):
+        line = self._peek().line
+        self._advance()  # PARALLEL
+        tracks = []
+        while not self._check(TokenType.ENDPARALLEL) and not self._check(TokenType.EOF):
+            if self._check(TokenType.TRACK):
+                tracks.append(self._parse_track())
+            else:
+                tok = self._peek()
+                self.errors.append(ParseError(
+                    "Only TRACK blocks are allowed inside PARALLEL",
+                    tok.line, tok.column))
+                self._advance()
+                self._synchronize()
+        self._expect(TokenType.ENDPARALLEL, "Expected 'ENDPARALLEL' to close PARALLEL block")
+        return ParallelBlock(tracks, line)
 
     def _parse_include(self):
         line = self._peek().line
