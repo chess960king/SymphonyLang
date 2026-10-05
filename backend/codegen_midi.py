@@ -20,6 +20,7 @@ allocation-style optimization pass), not implemented in this version.
 
 import re
 import mido
+from channel_allocator import allocate_channels
 from mido import Message, MetaMessage, MidiFile, MidiTrack, bpm2tempo
 
 NOTE_PATTERN = re.compile(r"^[A-G](#|b)?\d$")
@@ -62,12 +63,16 @@ def note_name_to_midi(note):
 
 
 class MIDICodeGenerator:
-    def __init__(self, ticks_per_beat=480):
+    def __init__(self, ticks_per_beat=480, channel_map=None):
         self.ticks_per_beat = ticks_per_beat
+        self.channel_map = channel_map or {}
         self.track = MidiTrack()
-        self.pending_delay = 0     # ticks accumulated from REST that haven't been "spent" yet
+        self.tracks = [self.track]
+        self.pending_delay = 0
         self.channel = 0
-        self.max_steps = 200_000   # safety limit against accidental infinite loops
+        self.current_track_name = None
+        self.track_states = {}
+        self.max_steps = 200_000
 
     # ---------- timing helpers ----------
 
@@ -76,34 +81,86 @@ class MIDICodeGenerator:
                  "eighth": 0.5, "sixteenth": 0.25}[duration_word]
         return int(beats * self.ticks_per_beat)
 
+    def _select_track(self, name, channel=None):
+        if name not in self.track_states:
+            track = MidiTrack()
+            self.tracks.append(track)
+            self.track_states[name] = {
+                "track": track,
+                "channel": self.channel_map.get(name, 0) if channel is None else channel,
+                "pending_delay": 0,
+            }
+        state = self.track_states[name]
+        self.current_track_name = name
+        self.track = state["track"]
+        self.channel = state["channel"]
+        self.pending_delay = state["pending_delay"]
+
+    def _sync_track_state(self):
+        if self.current_track_name is not None:
+            state = self.track_states[self.current_track_name]
+            state["channel"] = self.channel
+            state["pending_delay"] = self.pending_delay
+
     # ---------- MIDI emission ----------
 
     def _emit_note(self, note_str, duration_word):
         ticks = self._duration_ticks(duration_word)
         midi_num = note_name_to_midi(note_str)
-        self.track.append(Message('note_on', channel=self.channel, note=midi_num,
-                                   velocity=80, time=self.pending_delay))
+        self.track.append(
+            Message(
+                'note_on',
+                channel=self.channel,
+                note=midi_num,
+                velocity=80,
+                time=self.pending_delay
+            )
+        )
+        
         self.pending_delay = 0
-        self.track.append(Message('note_off', channel=self.channel, note=midi_num,
-                                   velocity=80, time=ticks))
+        self.track.append(
+            Message(
+                'note_off',
+                channel=self.channel,
+                note=midi_num,
+                velocity=80,
+                time=ticks
+            )
+        )
+        self._sync_track_state()
 
     def _emit_rest(self, duration_word):
         self.pending_delay += self._duration_ticks(duration_word)
+        self._sync_track_state()
 
     def _emit_tempo(self, bpm):
-        self.track.append(MetaMessage('set_tempo', tempo=bpm2tempo(bpm),
-                                       time=self.pending_delay))
+        self.track.append(
+            MetaMessage(
+                'set_tempo',
+                tempo=bpm2tempo(bpm),
+                time=self.pending_delay
+            )
+        )
         self.pending_delay = 0
+        self._sync_track_state()
 
     def _emit_instrument(self, name):
         if name == "Drums":
-            self.channel = 9  # standard General MIDI percussion channel
+            self.channel = 9
+            self._sync_track_state()
             return
-        self.channel = 0
+        self.channel = 0 if self.current_track_name is None else self.channel
         program = INSTRUMENT_PROGRAMS.get(name, 0)
-        self.track.append(Message('program_change', channel=self.channel,
-                                   program=program, time=self.pending_delay))
+        self.track.append(
+            Message(
+                'program_change',
+                channel=self.channel,
+                program=program,
+                time=self.pending_delay
+            )
+        )
         self.pending_delay = 0
+        self._sync_track_state()
 
     # ---------- IR interpretation ----------
 
@@ -143,7 +200,21 @@ class MIDICodeGenerator:
             instr = instructions[pc]
             op = instr.opcode
 
-            if op in ('LABEL', 'INCLUDE', 'TRACK_BEGIN', 'TRACK_END'):
+            if op in ('LABEL', 'INCLUDE'):
+                pc += 1
+
+            elif op == 'TRACK_BEGIN':
+                track_name = instr.args[0]
+                self._select_track(track_name)
+                pc += 1
+
+            elif op == 'TRACK_END':
+                self._sync_track_state()
+
+                self.current_track_name = None
+                self.track = self.tracks[0]
+                self.channel = 0
+                self.pending_delay = 0
                 pc += 1
 
             elif op == 'ASSIGN':
@@ -233,7 +304,8 @@ class MIDICodeGenerator:
 
     def save(self, path):
         mid = MidiFile(ticks_per_beat=self.ticks_per_beat)
-        mid.tracks.append(self.track)
+        for track in self.tracks:
+            mid.tracks.append(track)
         mid.save(path)
         return path
 

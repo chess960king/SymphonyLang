@@ -17,8 +17,9 @@ structure becomes flat structure with jumps.
 
 from ast_nodes import (
     VarDecl, Assign, BinaryExpr, UnaryExpr, NumberLiteral, Identifier,
+    NoteLiteral, DurationLiteral,
     IfStmt, ForStmt, RepeatStmt, FuncDecl, FuncCall, ReturnStmt,
-    PlayStmt, RestStmt, TempoStmt, InstrumentStmt, TrackStmt, IncludeStmt,
+    PlayStmt, RestStmt, TempoStmt, InstrumentStmt, TrackStmt, ParallelBlock, IncludeStmt,
 )
 
 
@@ -104,6 +105,8 @@ class IRGenerator:
             self._emit('INSTRUMENT', [stmt.name])
         elif isinstance(stmt, TrackStmt):
             self._gen_track(stmt)
+        elif isinstance(stmt, ParallelBlock):
+            self._gen_parallel(stmt)
         elif isinstance(stmt, IncludeStmt):
             self._emit('INCLUDE', [stmt.filename])
         else:
@@ -115,6 +118,10 @@ class IRGenerator:
 
     def _gen_expr(self, expr):
         if isinstance(expr, NumberLiteral):
+            return expr.value
+        if isinstance(expr, NoteLiteral):
+            return expr.value
+        if isinstance(expr, DurationLiteral):
             return expr.value
         if isinstance(expr, Identifier):
             return expr.name
@@ -257,6 +264,10 @@ class IRGenerator:
         for s in node.body:
             self._gen_stmt(s)
         self._emit('TRACK_END', [node.name])
+
+    def _gen_parallel(self, node):
+        for track in node.tracks:
+            self._gen_track(track)
 
 
 def print_ir(instructions):

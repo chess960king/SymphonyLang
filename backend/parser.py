@@ -10,7 +10,8 @@ stopping immediately, so multiple errors can surface in one run.
 
 from tokens import TokenType
 from ast_nodes import (
-    Program, VarDecl, Assign, BinaryExpr, UnaryExpr, NumberLiteral, Identifier,
+    Program, VarDecl, Assign, BinaryExpr, UnaryExpr,
+    NumberLiteral, Identifier, NoteLiteral, DurationLiteral,
     IfStmt, ForStmt, RepeatStmt, FuncDecl, FuncCall, ReturnStmt,
     PlayStmt, RestStmt, TempoStmt, InstrumentStmt, TrackStmt, ParallelBlock,
     IncludeStmt,
@@ -220,9 +221,19 @@ class Parser:
         if tok.type == TokenType.NUMBER:
             self._advance()
             return NumberLiteral(tok.value, tok.line)
+
+        if tok.type == TokenType.NOTE_LITERAL:
+            self._advance()
+            return NoteLiteral(tok.value, tok.line)
+
+        if tok.type == TokenType.DURATION_LITERAL:
+            self._advance()
+            return DurationLiteral(tok.value, tok.line)
+
         if tok.type == TokenType.IDENTIFIER:
             self._advance()
             return Identifier(tok.value, tok.line)
+        
         if tok.type == TokenType.LPAREN:
             self._advance()
             expr = self._parse_expression()

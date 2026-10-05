@@ -17,8 +17,9 @@ just like in a real programming language.
 
 from ast_nodes import (
     VarDecl, Assign, BinaryExpr, UnaryExpr, NumberLiteral, Identifier,
+    NoteLiteral, DurationLiteral,
     IfStmt, ForStmt, RepeatStmt, FuncDecl, FuncCall, ReturnStmt,
-    PlayStmt, RestStmt, TempoStmt, InstrumentStmt, TrackStmt, IncludeStmt,
+    PlayStmt, RestStmt, TempoStmt, InstrumentStmt, TrackStmt, ParallelBlock, IncludeStmt,
 )
 from symbol_table import SymbolTable, SymbolAlreadyDeclared
 from tokens import DURATIONS
@@ -86,6 +87,8 @@ class SemanticAnalyzer:
             self._visit_instrument(stmt)
         elif isinstance(stmt, TrackStmt):
             self._visit_track(stmt)
+        elif isinstance(stmt, ParallelBlock):
+            self._visit_parallel(stmt)
         elif isinstance(stmt, IncludeStmt):
             pass  # file resolution handled separately (linking stage)
         else:
@@ -129,9 +132,13 @@ class SemanticAnalyzer:
     def _visit_expr(self, expr):
         if isinstance(expr, NumberLiteral):
             return
+        if isinstance(expr, NoteLiteral):
+            return
+        if isinstance(expr, DurationLiteral):
+            return
         if isinstance(expr, Identifier):
             if not self.symtab.is_declared(expr.name):
-                self._error(f"Undeclared variable '{expr.name}'", expr.line)
+                self._error(f"Use of undeclared variable '{expr.name}'", expr.line)
             return
         if isinstance(expr, BinaryExpr):
             self._visit_expr(expr.left)
@@ -249,6 +256,10 @@ class SemanticAnalyzer:
         except SymbolAlreadyDeclared as e:
             self._error(str(e), node.line)
         self._visit_block(node.body)
+
+    def _visit_parallel(self, node):
+        for track in node.tracks:
+            self._visit_track(track)
 
     # ---------- shared helpers ----------
 

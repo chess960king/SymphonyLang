@@ -85,6 +85,23 @@ class Identifier(Node):
     def __repr__(self):
         return f"Identifier({self.name})"
 
+class NoteLiteral(Node):
+    def __init__(self, value, line):
+        self.value = value
+        self.line = line
+
+    def __repr__(self):
+        return f"Note({self.value})"
+
+
+class DurationLiteral(Node):
+    def __init__(self, value, line):
+        self.value = value
+        self.line = line
+
+    def __repr__(self):
+        return f"Duration({self.value})"
+
 
 # ---------- Control Flow ----------
 
